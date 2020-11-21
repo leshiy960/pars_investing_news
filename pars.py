@@ -5,7 +5,6 @@ import datetime as dt
 import sqlite3
 import pandas as pd
 from multiprocessing.dummy import Pool as TPool
-from multiprocessing import Pool
 
 
 class parser:
@@ -46,7 +45,7 @@ class parser:
         print(message)
         while True:
             try:
-                ans = int(input('номер:')) - 1
+                ans = int(input('номер: ')) - 1
                 address, table_name = variant[ans][0], variant[ans][2]
                 break
             except Exception:
@@ -55,16 +54,11 @@ class parser:
         if ans != -1:
             self.load(address, table_name)
         else:
-            if input('use threads instead processes?') == 'y':
-                p = TPool(4)
-                res = p.starmap(self.load, [(x[0], x[2]) for x in variant])
-                p.close()
-                p.join()
-            else:
-                p = Pool(4)
-                res = p.starmap(self.load, [(x[0], x[2]) for x in variant])
-                p.close()
-                p.terminate()
+            threads = int(input('сколько тредов использовать?: '))
+            p = TPool(threads)
+            p.starmap(self.load, [(x[0], x[2]) for x in variant])
+            p.close()
+            p.join()
 
     def load(self, address: str, table: str):
         """Метод загружает новости по выбранному адресу."""

@@ -4,12 +4,14 @@ import bs4
 import datetime as dt
 import sqlite3
 import pandas as pd
+from multiprocessing.dummy import Pool as TPool
+from multiprocessing import Pool
 
 
 class parser:
     """Загрузчик новостей с investing.com."""
 
-    def __init__(self):
+    def __init__(self, pool='thread'):
         self.headers = {"User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux "
                                       "x86_64; rv:82.0) Gecko/20100101 "
                                       "Firefox/82.0"}
@@ -36,6 +38,7 @@ class parser:
                     'crypto')
                    ]
         message = 'Выберите что загружать:\n'
+        message += '0) загрузить все\n'
         for i in range(len(variant)):
             message += '{}) {} - {}\n'.format(i + 1,
                                               variant[i][1],
@@ -49,8 +52,19 @@ class parser:
             except Exception:
                 print('введите число от 1 до {}'.format(len(variant)))
 
-        print(address, table_name)
-        self.load(address, table_name)
+        if ans != -1:
+            self.load(address, table_name)
+        else:
+            if input('use threads instead processes?') == 'y':
+                p = TPool(4)
+                res = p.starmap(self.load, [(x[0], x[2]) for x in variant])
+                p.close()
+                p.join()
+            else:
+                p = Pool(4)
+                res = p.starmap(self.load, [(x[0], x[2]) for x in variant])
+                p.close()
+                p.terminate()
 
     def load(self, address: str, table: str):
         """Метод загружает новости по выбранному адресу."""
@@ -134,5 +148,5 @@ class parser:
 
 
 if __name__ == '__main__':
-    p = parser()
+    p = parser('process')
     p.start()

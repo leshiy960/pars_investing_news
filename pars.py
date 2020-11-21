@@ -54,7 +54,8 @@ class parser:
         if ans != -1:
             self.load(address, table_name)
         else:
-            threads = int(input('сколько тредов использовать?: '))
+            # threads = int(input('сколько тредов использовать?: '))
+            threads = 8
             p = TPool(threads)
             p.starmap(self.load, [(x[0], x[2]) for x in variant])
             p.close()
@@ -83,17 +84,12 @@ class parser:
         page = cur.execute('select max(page) from ' + table).fetchall()[0][0]
         page = int(page) if page is not None else 1
 
-        df = pd.read_sql('select * from ' + table, db)
-        df['title_date'] = df.date + df.title
-
         while True:
             r = requests.get(address + str(page), headers=self.headers)
             html = r.text
             soup = bs4.BeautifulSoup(html, 'html.parser')
 
             mydivs = soup.findAll("div", {"class": "largeTitle"})
-            # print(html)
-            # input()
             if len(mydivs) != 0:
                 mydivs = mydivs[0]
             else:
@@ -107,11 +103,6 @@ class parser:
                 try:
                     title = re.findall(r'title=".*?">(.+?)</a>', article)[0]
                     date = re.findall(r'"date">(.+?)</span>', article)[0][3:]
-
-                    # пропуск уже скачанных статей
-                    if date + title in df.title.values:
-                        print('debug пропуск', title)
-                        continue
 
                     url = re.findall(r'href="(.+?)"', article)[0]
                     if 'https' not in url:

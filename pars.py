@@ -10,7 +10,7 @@ from multiprocessing.dummy import Pool as TPool
 class parser:
     """Загрузчик новостей с investing.com."""
 
-    def __init__(self, pool='thread'):
+    def __init__(self):
         self.headers = {"User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux "
                                       "x86_64; rv:82.0) Gecko/20100101 "
                                       "Firefox/82.0"}
@@ -55,7 +55,7 @@ class parser:
             self.load(address, table_name)
         else:
             # threads = int(input('сколько тредов использовать?: '))
-            threads = 8
+            threads = 4
             p = TPool(threads)
             p.starmap(self.load, [(x[0], x[2]) for x in variant])
             p.close()
@@ -82,18 +82,26 @@ class parser:
 
         # определение номера страницы, на которой остановились
         page = cur.execute('select max(page) from ' + table).fetchall()[0][0]
-        page = int(page) if page is not None else 1
+        page = int(page) + 1 if page is not None else 1
 
         while True:
             r = requests.get(address + str(page), headers=self.headers)
             html = r.text
             soup = bs4.BeautifulSoup(html, 'html.parser')
 
+            # условие завершения загрузки
+            if re.findall('Запрошенная вами страница не существует', html):
+                # print('выход по "Запрошенная вами страница не существует"')
+                break
+            elif page > 5 and re.findall('назад', html):
+                # print('выход по "назад"')
+                break
+
             mydivs = soup.findAll("div", {"class": "largeTitle"})
             if len(mydivs) != 0:
                 mydivs = mydivs[0]
             else:
-                print('debug пропуск mydivs')
+                # print('debug пропуск mydivs')
                 page += 1
                 continue
 
@@ -110,11 +118,6 @@ class parser:
                     author = re.findall(r'class="articleDetails"><span>(.+?)</span>', article)[0]
                     about = re.findall(r'<p>(.+?)</p>', article.replace('\n', ''))[0]
 
-                    # условие остановки загрузки
-                    # (дошли до последней стр и сайт редиректнул в начало)
-                    if 'назад' in date and page > 10:
-                        return
-
                     if 'назад' in date:
                         date = dt.datetime.now().strftime('%d.%m.%Y')
                     full = ''
@@ -130,8 +133,9 @@ class parser:
                     pass
             db.commit()
             page += 1
+        print('Загрузка {} завершена'.format(address))
 
 
 if __name__ == '__main__':
-    p = parser('process')
+    p = parser()
     p.start()

@@ -36,6 +36,15 @@ class parser:
                     'Новости криптовалют',
                     'crypto')
                    ]
+        db = sqlite3.connect('investing.sqlite')
+        cur = db.cursor()
+        sql = """create table if not exists status (
+                    address text primary key,
+                    last_page integer not null) ;
+              """
+        cur.execute(sql)
+        db.commit()
+
         message = 'Выберите что загружать:\n'
         message += '0) загрузить все\n'
         for i in range(len(variant)):
@@ -69,20 +78,29 @@ class parser:
         sql = """
               create table if not exists {} (
                   id integer primary key autoincrement,
-                  page integer not null,
                   date text not null,
                   author text not null,
                   title text not null,
                   about text not null,
                   full text not null,
-                  url text not null);
+                  url text not null UNIQUE);
               """.format(table)
         cur.execute(sql)
         db.commit()
 
         # определение номера страницы, на которой остановились
-        page = cur.execute('select max(page) from ' + table).fetchall()[0][0]
-        page = int(page) + 1 if page is not None else 1
+        page = cur.execute('''select last_page
+                              from status
+                              where address=?
+                           ''', [address]).fetchall()
+        if len(page) == 0:
+            cur.execute('''insert into status (address, last_page)
+                           values(?,?);
+                        ''', [address, 1])
+            db.commit()
+            page = 1
+        else:
+            page = int(page[0][0])
         # print(page)
 
         while True:
@@ -132,17 +150,19 @@ class parser:
                         date = dt.datetime.now().strftime('%d.%m.%Y')
                     full = ''
 
-                    sql = """insert into {}
-                             (page, date, author, title, about, full, url)
-                             values(?,?,?,?,?,?,?);""".format(table)
-                    cur.execute(sql,
-                                [page, date, author, title, about, full, url])
+                    sql = """insert or ignore into {}
+                             (date, author, title, about, full, url)
+                             values(?,?,?,?,?,?);""".format(table)
+                    cur.execute(sql, [date, author, title, about, full, url])
 
-                    # print(page, date, title)
                 except Exception:
                     pass
-            db.commit()
             print(address + str(page), 'loaded')
+            cur.execute('''update status
+                           set last_page=?
+                           where address=?
+                        ''', [page, address])
+            db.commit()
             page += 1
         print('>>> Загрузка {} завершена'.format(address))
 

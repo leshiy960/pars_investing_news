@@ -82,6 +82,7 @@ class parser:
         # определение номера страницы, на которой остановились
         page = cur.execute('select max(page) from ' + table).fetchall()[0][0]
         page = int(page) + 1 if page is not None else 1
+        # print(page)
 
         while True:
             r = requests.get(address + str(page), headers=self.headers)
@@ -92,8 +93,8 @@ class parser:
             if re.findall('Запрошенная вами страница не существует', html):
                 # print('выход по "Запрошенная вами страница не существует"')
                 break
-            elif page > 5 and re.findall('назад', html):
-                # print('выход по "назад"')
+            elif r.url != address + str(page):
+                # print('выход по "редиректу на первую страницу"')
                 break
 
             mydivs = soup.findAll("div", {"class": "largeTitle"})
@@ -127,10 +128,11 @@ class parser:
                     cur.execute(sql,
                                 [page, date, author, title, about, full, url])
 
-                    print(page, date, title)
+                    # print(page, date, title)
                 except Exception:
                     pass
             db.commit()
+            print(address + str(page), 'loaded')
             page += 1
         print('Загрузка {} завершена'.format(address))
 

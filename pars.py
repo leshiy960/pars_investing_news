@@ -93,7 +93,7 @@ class parser:
             if re.findall('Запрошенная вами страница не существует', html):
                 # print('выход по "Запрошенная вами страница не существует"')
                 break
-            elif r.url != address + str(page):
+            elif r.url != address + str(page) and page != 1:
                 # print('выход по "редиректу на первую страницу"')
                 break
 
@@ -134,7 +134,7 @@ class parser:
             db.commit()
             print(address + str(page), 'loaded')
             page += 1
-        print('Загрузка {} завершена'.format(address))
+        print('>>> Загрузка {} завершена'.format(address))
 
 
 if __name__ == '__main__':

@@ -3,7 +3,6 @@ import re
 import bs4
 import datetime as dt
 import sqlite3
-import pandas as pd
 from multiprocessing.dummy import Pool as TPool
 
 

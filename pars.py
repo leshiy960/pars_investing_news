@@ -2,6 +2,7 @@ import requests
 import re
 import bs4
 import datetime as dt
+import time
 import sqlite3
 from multiprocessing.dummy import Pool as TPool
 
@@ -85,7 +86,16 @@ class parser:
         # print(page)
 
         while True:
-            r = requests.get(address + str(page), headers=self.headers)
+            r = None
+            for i in range(10):
+                try:
+                    r = requests.get(address + str(page), headers=self.headers)
+                    break
+                except Exception:
+                    time.sleep(120)
+            if r is None:
+                print('Загрузка не удалась', address + str(page))
+                break
             html = r.text
             soup = bs4.BeautifulSoup(html, 'html.parser')
 

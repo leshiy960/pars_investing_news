@@ -63,9 +63,8 @@ class parser:
         if ans != -1:
             self.load(address, table_name)
         else:
-            # threads = int(input('сколько тредов использовать?: '))
-            threads = 4
-            p = TPool(threads)
+            threads = input('сколько тредов использовать (рекомендуется 1): ')
+            p = TPool(int(threads))
             p.starmap(self.load, [(x[0], x[2]) for x in variant])
             p.close()
             p.join()
@@ -110,7 +109,8 @@ class parser:
                     r = requests.get(address + str(page), headers=self.headers)
                     break
                 except Exception:
-                    time.sleep(120)
+                    print(i, 'load failed, trying again...')
+                    time.sleep(60)
             if r is None:
                 print('Загрузка не удалась', address + str(page))
                 break

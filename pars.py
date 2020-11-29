@@ -5,9 +5,106 @@ import datetime as dt
 import time
 import sqlite3
 from multiprocessing.dummy import Pool as TPool
+from newspaper import Article
 
 
-class parser:
+class Db:
+    """Прослойка для работы с базой."""
+
+    def __init__(self):
+        self.db_path = 'investing.sqlite'
+
+    def init_db(self, tables):
+        """Создает в базе таблицы по переданному списку имен таблиц."""
+        db = sqlite3.connect(self.db_path)
+        cur = db.cursor()
+        sql = """create table if not exists status (
+                   address text primary key,
+                   last_page integer not null);
+              """
+        cur.execute(sql)
+        for table in tables:
+            sql = """create table if not exists {} (
+                       id integer primary key autoincrement,
+                       date text not null,
+                       author text not null,
+                       title text not null,
+                       about text not null,
+                       full text not null,
+                       url text not null UNIQUE);
+                  """.format(table)
+            cur.execute(sql)
+        db.commit()
+        db.close()
+
+    def get_last_page(self, address):
+        """Возвращает номер последней загруженной страницы."""
+        db = sqlite3.connect(self.db_path)
+        cur = db.cursor()
+        page = cur.execute('''select last_page
+                              from status
+                              where address=?
+                           ''', [address]).fetchall()
+        if len(page) == 0:
+            cur.execute('''insert into status (address, last_page)
+                             values(?,?);
+                        ''', [address, 1])
+            db.commit()
+            page = 1
+        else:
+            page = int(page[0][0])
+        db.close()
+        return page
+
+    def add_news(self, table, date, author, title, about, full, url):
+        """Добавляет в базу одну новость."""
+        db = sqlite3.connect(self.db_path)
+        cur = db.cursor()
+        sql = """insert or ignore into {}
+                 (date, author, title, about, full, url)
+                 values(?,?,?,?,?,?);""".format(table)
+        cur.execute(sql, [date, author, title, about, full, url])
+        db.commit()
+        db.close()
+
+    def update_last_page(self, address, page):  # TODO переделать адрес на имя таблицы
+        """Обновляет номер последней загруженной страницы."""
+        db = sqlite3.connect(self.db_path)
+        cur = db.cursor()
+        cur.execute('''update status
+                       set last_page=?
+                       where address=?
+                    ''', [page, address])
+        db.commit()
+        db.close()
+
+    def get_news_without_full(self, table):
+        """Возвращает статьи без полного текста.
+
+        Возвращает список кортежей [(id, url), ...]
+        """
+        db = sqlite3.connect(self.db_path)
+        cur = db.cursor()
+        need_load = cur.execute("""select id, url
+                                     from {}
+                                     where full='';
+                                """.format(table)).fetchall()
+        db.close()
+        return need_load
+
+    def update_full_text(self, table, id_, full):
+        """Обновляет полный текст статьи по id."""
+        db = sqlite3.connect(self.db_path)
+        cur = db.cursor()
+        cur.execute('''update {}
+                       set full=?
+                       where id=?
+                    '''.format(table), [full, id_])
+        db.commit()
+        db.close()
+
+
+class Parser:
     """Загрузчик новостей с investing.com."""
 
     def __init__(self):
@@ -36,14 +133,6 @@ class parser:
                     'Новости криптовалют',
                     'crypto')
                    ]
-        db = sqlite3.connect('investing.sqlite')
-        cur = db.cursor()
-        sql = """create table if not exists status (
-                    address text primary key,
-                    last_page integer not null) ;
-              """
-        cur.execute(sql)
-        db.commit()
 
         message = 'Выберите что загружать:\n'
         message += '0) загрузить все\n'
@@ -60,47 +149,29 @@ class parser:
             except Exception:
                 print('введите число от 1 до {}'.format(len(variant)))
 
+        msg = "Загружать полный текст статей? (y/n)\n"
+        msg += "это может занять много времени: "
+        load_full = input(msg)
+        load_full = True if load_full == 'y' else False
+
         if ans != -1:
-            self.load(address, table_name)
+            self.load(address, table_name, load_full)
+            Db().init_db([table_name])
         else:
             threads = input('сколько тредов использовать (рекомендуется 1): ')
+            Db().init_db([x[2] for x in variant])
             p = TPool(int(threads))
-            p.starmap(self.load, [(x[0], x[2]) for x in variant])
+            p.starmap(self.load, [(x[0], x[2], load_full) for x in variant])
             p.close()
             p.join()
 
-    def load(self, address: str, table: str):
+    def load(self, address: str, table: str, load_full: bool):
         """Метод загружает новости по выбранному адресу."""
 
-        db = sqlite3.connect('investing.sqlite')
-        cur = db.cursor()
-        sql = """
-              create table if not exists {} (
-                  id integer primary key autoincrement,
-                  date text not null,
-                  author text not null,
-                  title text not null,
-                  about text not null,
-                  full text not null,
-                  url text not null UNIQUE);
-              """.format(table)
-        cur.execute(sql)
-        db.commit()
+        db = Db()
 
         # определение номера страницы, на которой остановились
-        page = cur.execute('''select last_page
-                              from status
-                              where address=?
-                           ''', [address]).fetchall()
-        if len(page) == 0:
-            cur.execute('''insert into status (address, last_page)
-                           values(?,?);
-                        ''', [address, 1])
-            db.commit()
-            page = 1
-        else:
-            page = int(page[0][0])
-        # print(page)
+        page = db.get_last_page(address)
 
         while True:
             r = None
@@ -150,23 +221,29 @@ class parser:
                         date = dt.datetime.now().strftime('%d.%m.%Y')
                     full = ''
 
-                    sql = """insert or ignore into {}
-                             (date, author, title, about, full, url)
-                             values(?,?,?,?,?,?);""".format(table)
-                    cur.execute(sql, [date, author, title, about, full, url])
+                    db.add_news(table, date, author, title, about, full, url)
 
                 except Exception:
                     pass
             print(address + str(page), 'loaded')
-            cur.execute('''update status
-                           set last_page=?
-                           where address=?
-                        ''', [page, address])
-            db.commit()
+            db.update_last_page(address, page)
             page += 1
+
+        # загрузка полного текста статей
+        if load_full:
+            need_load = db.get_news_without_full(table)
+            for id_, url in need_load:
+                a = Article(url)
+                a.download()
+                a.parse()
+                full = a.text
+                if len(full) == 0:
+                    full = 'bad parse'
+                db.update_full_text(table, id_, full)
+                print('Полный текст {} загружен'.format(url))
         print('>>> Загрузка {} завершена'.format(address))
 
 
 if __name__ == '__main__':
-    p = parser()
-    p.start()
+    parser = Parser()
+    parser.start()

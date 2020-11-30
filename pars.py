@@ -233,15 +233,27 @@ class Parser:
         if load_full:
             need_load = db.get_news_without_full(table)
             for id_, url in need_load:
-                a = Article(url)
-                a.download()
-                a.parse()
-                full = a.text
+                full = self.load_full(url)
                 if len(full) == 0:
                     full = 'bad parse'
                 db.update_full_text(table, id_, full)
                 print('Полный текст {} загружен'.format(url))
         print('>>> Загрузка {} завершена'.format(address))
+
+    @staticmethod
+    def load_full(url):
+        """Загружает полынй текст статьи по url."""
+        for i in range(10):
+            full = ''
+            try:
+                a = Article(url)
+                a.download()
+                a.parse()
+                full = a.text
+            except Exception:
+                time.sleep(10)
+            finally:
+                return full
 
 
 if __name__ == '__main__':

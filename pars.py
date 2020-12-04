@@ -155,10 +155,10 @@ class Parser:
         load_full = True if load_full == 'y' else False
 
         if ans != -1:
-            self.load(address, table_name, load_full)
             Db().init_db([table_name])
+            self.load(address, table_name, load_full)
         else:
-            threads = input('сколько тредов использовать (рекомендуется 1): ')
+            threads = input('сколько тредов использовать (рекомендуется 4): ')
             Db().init_db([x[2] for x in variant])
             p = TPool(int(threads))
             p.starmap(self.load, [(x[0], x[2], load_full) for x in variant])
@@ -219,30 +219,28 @@ class Parser:
 
                     if 'назад' in date:
                         date = dt.datetime.now().strftime('%d.%m.%Y')
-                    full = ''
+
+                    # загрузка полного текста статей
+                    if load_full:
+                        full = self.load_full(url)
+                        if len(full) == 0:
+                            full = 'bad parse'
+                    else:
+                        full = ''
 
                     db.add_news(table, date, author, title, about, full, url)
+                    print(table, page, date, author, title)
 
                 except Exception:
                     pass
-            print(address + str(page), 'loaded')
             db.update_last_page(address, page)
             page += 1
 
-        # загрузка полного текста статей
-        if load_full:
-            need_load = db.get_news_without_full(table)
-            for id_, url in need_load:
-                full = self.load_full(url)
-                if len(full) == 0:
-                    full = 'bad parse'
-                db.update_full_text(table, id_, full)
-                print('Полный текст {} загружен'.format(url))
         print('>>> Загрузка {} завершена'.format(address))
 
     @staticmethod
     def load_full(url):
-        """Загружает полынй текст статьи по url."""
+        """Загружает полный текст статьи по url."""
         for i in range(10):
             full = ''
             try:

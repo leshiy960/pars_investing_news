@@ -19,7 +19,7 @@ class Db:
         db = sqlite3.connect(self.db_path)
         cur = db.cursor()
         sql = """create table if not exists status (
-                   address text primary key,
+                   table_name text primary key,
                    last_page integer not null);
               """
         cur.execute(sql)
@@ -37,18 +37,18 @@ class Db:
         db.commit()
         db.close()
 
-    def get_last_page(self, address):
+    def get_last_page(self, table):
         """Возвращает номер последней загруженной страницы."""
         db = sqlite3.connect(self.db_path)
         cur = db.cursor()
         page = cur.execute('''select last_page
                               from status
-                              where address=?
-                           ''', [address]).fetchall()
+                              where table_name=?
+                           ''', [table]).fetchall()
         if len(page) == 0:
-            cur.execute('''insert into status (address, last_page)
+            cur.execute('''insert into status (table_name, last_page)
                              values(?,?);
-                        ''', [address, 1])
+                        ''', [table, 1])
             db.commit()
             page = 1
         else:
@@ -67,14 +67,14 @@ class Db:
         db.commit()
         db.close()
 
-    def update_last_page(self, address, page):  # TODO переделать адрес на имя таблицы
+    def update_last_page(self, table, page):
         """Обновляет номер последней загруженной страницы."""
         db = sqlite3.connect(self.db_path)
         cur = db.cursor()
         cur.execute('''update status
                        set last_page=?
-                       where address=?
-                    ''', [page, address])
+                       where table_name=?
+                    ''', [page, table])
         db.commit()
         db.close()
 
@@ -171,7 +171,7 @@ class Parser:
         db = Db()
 
         # определение номера страницы, на которой остановились
-        page = db.get_last_page(address)
+        page = db.get_last_page(table)
 
         while True:
             r = None
@@ -233,7 +233,7 @@ class Parser:
 
                 except Exception:
                     pass
-            db.update_last_page(address, page)
+            db.update_last_page(table, page)
             page += 1
 
         print('>>> Загрузка {} завершена'.format(address))
